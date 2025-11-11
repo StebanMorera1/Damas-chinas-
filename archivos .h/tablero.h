@@ -3,12 +3,6 @@
 #include <optional>                       // Para celdas vacías o con pieza
 #include "tipos.h"                        // Tipos básicos del dominio
 
-// ============================================================
-/* Archivo: dominios/tablero.h
-   Autor: Steban Felipe Morera Busaquillo
-   Descripción: Representa el tablero 10x10 y operaciones básicas
-                de lectura/escritura sobre sus celdas. */
-// ============================================================
 class Tablero {
 public:
     static constexpr int N = 10;          // Tamaño del tablero (10x10)
