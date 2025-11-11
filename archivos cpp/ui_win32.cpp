@@ -2,14 +2,16 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include <ShlObj.h> 
+#include <ShlObj.h> // SHGetFolderPathW
 
-
+// Forward
 static void DrawFancyHeader(HDC ctx, RECT rcClient, RECT rtBoard, const wchar_t* turno);
 static bool SaveHBITMAPToBMP(HBITMAP hbm, const wchar_t* path);
 
+// Ancho fijo del panel lateral para todo el archivo
 static constexpr int PANEL_W = 280;
 
+// Helper: formatea Pos como "A1..J10"
 static std::wstring PosATexto(const Pos& p) {
     wchar_t col = L'A' + p.c;
     wchar_t buf[16];
@@ -30,20 +32,22 @@ void UIWin32::deshacer() {
     }
 }
 
+
 RECT UIWin32::rectTablero(RECT rc) const {
-   
-    const int TOP_OFFSET = 72; 
+    // Reservar espacio para panel lateral
+    const int TOP_OFFSET = 72; // espacio para menú + título
     RECT zona{ rc.left, rc.top + TOP_OFFSET, rc.right - PANEL_W, rc.bottom };
 
     int w = zona.right - zona.left;
     int h = zona.bottom - zona.top;
-    int lado = ((w < h) ? w : h) - 40; 
+    int lado = ((w < h) ? w : h) - 40; // margen
     if (lado < 200) lado = (w < h ? w : h);
     int x = zona.left + (w - lado) / 2;
     int y = zona.top + (h - lado) / 2;
     RECT r{ x, y, x + lado, y + lado };
     return r;
 }
+
 
 Pos UIWin32::puntoACelda(int x, int y, RECT rt) const {
     int lado = rt.right - rt.left;
@@ -55,24 +59,28 @@ Pos UIWin32::puntoACelda(int x, int y, RECT rt) const {
 
 
 void UIWin32::pintar(HDC hdc, RECT rc) {
-   
+    // --- Double buffering to avoid flicker ---
     HDC memDC = CreateCompatibleDC(hdc);
     HBITMAP memBmp = CreateCompatibleBitmap(hdc, rc.right - rc.left, rc.bottom - rc.top);
     HGDIOBJ oldBmp = SelectObject(memDC, memBmp);
     HDC ctx = memDC;
 
+    // Fondo
     HBRUSH bg = (HBRUSH)GetStockObject(LTGRAY_BRUSH);
     FillRect(ctx, &rc, bg);
 
+    // Área de tablero
     RECT rt = rectTablero(rc);
 
+    // Encabezado bonito centrado (incluye profesor/materia y turno)
     const wchar_t* turnoTxt = (m_juego.turno() == Color::Blanco) ? L"Blancas" : L"Negras";
     DrawFancyHeader(ctx, rc, rt, turnoTxt);
 
     int lado = rt.right - rt.left;
     int tam = lado / Tablero::N;
 
-    
+    // --- Tablero (limitamos área al costado izquierdo para dejar el panel a la derecha) ---
+    // Casillas
     for (int f = 0; f < Tablero::N; ++f) {
         for (int c = 0; c < Tablero::N; ++c) {
             RECT cel{ rt.left + c * tam, rt.top + f * tam,
@@ -85,7 +93,7 @@ void UIWin32::pintar(HDC hdc, RECT rc) {
         }
     }
 
-    
+    // Piezas
     for (int f = 0; f < Tablero::N; ++f) {
         for (int c = 0; c < Tablero::N; ++c) {
             RECT cel{ rt.left + c * tam, rt.top + f * tam,
@@ -97,7 +105,7 @@ void UIWin32::pintar(HDC hdc, RECT rc) {
             HBRUSH old = (HBRUSH)SelectObject(ctx, piezaBr);
             Ellipse(ctx, cel.left + 6, cel.top + 6, cel.right - 6, cel.bottom - 6);
 
-    
+            // Contorno y brillo
             HPEN penPiece = CreatePen(PS_SOLID, 2, RGB(0, 0, 0));
             HPEN oldPenPiece = (HPEN)SelectObject(ctx, penPiece);
             HBRUSH oldBrushHollow = (HBRUSH)SelectObject(ctx, GetStockObject(HOLLOW_BRUSH));
@@ -127,7 +135,7 @@ void UIWin32::pintar(HDC hdc, RECT rc) {
         }
     }
 
-    
+    // Coordenadas en torno al tablero
     if (m_mostrarCoords) {
         SetBkMode(ctx, TRANSPARENT);
         HFONT hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
@@ -148,7 +156,8 @@ void UIWin32::pintar(HDC hdc, RECT rc) {
         SelectObject(ctx, oldF);
     }
 
-        if (m_juego.seleccion()) {
+    // Selección (marco) + destinos
+    if (m_juego.seleccion()) {
         Pos s = *m_juego.seleccion();
         RECT cel{ rt.left + s.c * tam, rt.top + s.f * tam,
                   rt.left + (s.c + 1) * tam, rt.top + (s.f + 1) * tam };
@@ -175,7 +184,7 @@ void UIWin32::pintar(HDC hdc, RECT rc) {
         }
     }
 
-    
+    // Resaltado último movimiento
     if (m_tieneUltimo) {
         RECT c1{ rt.left + m_lastDesde.c * tam, rt.top + m_lastDesde.f * tam, rt.left + (m_lastDesde.c + 1) * tam, rt.top + (m_lastDesde.f + 1) * tam };
         RECT c2{ rt.left + m_lastHasta.c * tam, rt.top + m_lastHasta.f * tam, rt.left + (m_lastHasta.c + 1) * tam, rt.top + (m_lastHasta.f + 1) * tam };
@@ -187,9 +196,10 @@ void UIWin32::pintar(HDC hdc, RECT rc) {
         SelectObject(ctx, oldp); SelectObject(ctx, oldb); DeleteObject(pen);
     }
 
-    
+    // Panel lateral a la derecha
     dibujarPanelInfo(ctx, rc, rt);
 
+    // --- Present backbuffer ---
     BitBlt(hdc, 0, 0, rc.right - rc.left, rc.bottom - rc.top, ctx, 0, 0, SRCCOPY);
     SelectObject(memDC, oldBmp);
     DeleteObject(memBmp);
@@ -225,7 +235,7 @@ void UIWin32::click(int x, int y) {
     Pos cel = puntoACelda(x, y, rt);
     std::string msg;
 
-    
+    // Re-seleccionar anula
     if (m_juego.seleccion() &&
         m_juego.seleccion()->f == cel.f &&
         m_juego.seleccion()->c == cel.c) {
@@ -240,7 +250,7 @@ void UIWin32::click(int x, int y) {
         }
     }
     else {
-    
+        // Guardamos el origen ANTES de mover
         Pos desde = *m_juego.seleccion();
         auto res = m_juego.moverA(cel, msg);
         if (res == ResultadoMovimiento::Ok) {
@@ -289,7 +299,7 @@ void UIWin32::dibujarPanelInfo(HDC hdc, RECT rc, RECT rt) const {
     FillRect(hdc, &pan, bg); DeleteObject(bg);
     FrameRect(hdc, &pan, (HBRUSH)GetStockObject(GRAY_BRUSH));
 
-    
+    // Fuente general del panel (Segoe UI 12)
     HFONT hBody = CreateFontW(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe UI");
     HFONT oldBody = (HFONT)SelectObject(hdc, hBody);
 
@@ -315,9 +325,9 @@ void UIWin32::dibujarPanelInfo(HDC hdc, RECT rc, RECT rt) const {
 
     int y = pan.top + 10;
 
-    
+    // ======= ESTADO =======
     header(L"Estado", y);
-    
+    // Toggle mostrar coordenadas
     m_chkCoords = RECT{ pan.left + 12, y, pan.left + 180, y + 20 };
     Rectangle(hdc, m_chkCoords.left, m_chkCoords.top, m_chkCoords.right, m_chkCoords.bottom);
     RECT tchk{ m_chkCoords.left + 24, m_chkCoords.top, m_chkCoords.right, m_chkCoords.bottom };
@@ -340,7 +350,7 @@ void UIWin32::dibujarPanelInfo(HDC hdc, RECT rc, RECT rt) const {
     bool capObl = m_juego.hayAlgunaCaptura(m_juego.turno());
     put(L"Captura obligatoria", capObl ? L"S\u00ED" : L"No", y);
 
-    
+    // ======= PUNTAJES =======
     header(L"Conteo y puntaje", y);
     int pezB = m_juego.contarPiezas(Color::Blanco);
     int pezN = m_juego.contarPiezas(Color::Negro);
@@ -362,7 +372,7 @@ void UIWin32::dibujarPanelInfo(HDC hdc, RECT rc, RECT rt) const {
     put(L"Tiempo Blancas (restante)", fmt(m_timeLeftBlancas), y);
     put(L"Tiempo Negras (restante)", fmt(m_timeLeftNegras), y);
 
-    
+    // ======= SELECCIÓN Y MOVIMIENTOS =======
     header(L"Selecci\u00F3n y jugadas", y);
     if (m_juego.seleccion()) {
         Pos s = *m_juego.seleccion();
@@ -390,7 +400,7 @@ void UIWin32::dibujarPanelInfo(HDC hdc, RECT rc, RECT rt) const {
         put(L"Seleccionada", L"(ninguna)", y);
     }
 
-    
+    // ======= HISTORIAL =======
     int btnH = 26;
     header(L"Historial", y);
 
@@ -408,7 +418,7 @@ void UIWin32::dibujarPanelInfo(HDC hdc, RECT rc, RECT rt) const {
         if (y > pan.bottom - 70) break;
     }
 
-    
+    // ======= ACCIONES =======
     y = pan.bottom - (btnH + 14);
     m_btnUndo = RECT{ pan.left + 12, y, pan.right - 12, y + btnH };
     {
@@ -429,7 +439,7 @@ void UIWin32::dibujarPanelInfo(HDC hdc, RECT rc, RECT rt) const {
         DrawTextW(hdc, L"Nueva partida", -1, &lb2, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     }
 
-    
+    // Restaurar fuentes
     SelectObject(hdc, oldBody);
     DeleteObject(hBody);
     DeleteObject(hHeader);
@@ -437,7 +447,7 @@ void UIWin32::dibujarPanelInfo(HDC hdc, RECT rc, RECT rt) const {
 
 
 void UIWin32::tick() {
-
+    // Cronómetro: descontar tiempo del bando que estaba jugando desde el último tick
     DWORD now = GetTickCount();
     if (m_lastTick == 0) { m_lastTick = now; m_lastTurn = m_juego.turno(); return; }
     DWORD delta = now - m_lastTick;
@@ -453,13 +463,13 @@ void UIWin32::tick() {
 
         m_lastTick += secs * 1000;
     }
-
+    // Detecta cambio de turno para empezar a contar al nuevo
     if (m_lastTurn != m_juego.turno()) {
         m_lastTurn = m_juego.turno();
         m_lastTick = now;
     }
 
-
+    // Fin por tiempo
     if (!m_gameOver && (m_timeLeftBlancas == 0 || m_timeLeftNegras == 0)) {
         m_gameOver = true;
         m_ganador = (m_timeLeftBlancas == 0) ? L"Negras" : L"Blancas";
@@ -471,8 +481,8 @@ void UIWin32::tick() {
 
 void UIWin32::reiniciar() {
     m_juego.reiniciar();
-    m_timeLeftBlancas = 200; 
-    m_timeLeftNegras = 200; 
+    m_timeLeftBlancas = 300; // 5 minutos
+    m_timeLeftNegras = 300; // 5 minutos
     m_lastTick = 0;
     m_lastTurn = Color::Blanco;
     m_gameOver = false;
@@ -483,18 +493,18 @@ void UIWin32::reiniciar() {
 
 
 void UIWin32::exportarHistorial() const {
-    
+    // Obtiene historial en UTF-16 y lo guarda como .txt en el escritorio del usuario
     auto hist = m_juego.historialJugadas();
     wchar_t path[MAX_PATH];
     if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_DESKTOP, nullptr, 0, path))) {
         std::wstring file = std::wstring(path) + L"\\Historial_Damas.txt";
         HANDLE h = CreateFileW(file.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (h != INVALID_HANDLE_VALUE) {
-            
+            // Cabecera
             std::wstring header = L"Historial de jugadas - Damas Internacionales\r\n\r\n";
             DWORD wr = 0;
             WriteFile(h, header.c_str(), (DWORD)(header.size() * sizeof(wchar_t)), &wr, nullptr);
-            
+            // Jugadas
             for (size_t i = 0; i < hist.size(); ++i) {
                 std::wstring linea = std::to_wstring(i + 1) + L". " + hist[i] + L"\r\n";
                 WriteFile(h, linea.c_str(), (DWORD)(linea.size() * sizeof(wchar_t)), &wr, nullptr);
@@ -509,9 +519,9 @@ void UIWin32::exportarHistorial() const {
 }
 
 
-
+// Cabecera estética (badge redondeado con dos líneas centradas)
 static void DrawFancyHeader(HDC ctx, RECT rcClient, RECT rtBoard, const wchar_t* turno) {
-
+    // Área centrada respecto al tablero
     int badgeW = (rtBoard.right - rtBoard.left) - 80;
     if (badgeW < 360) badgeW = (rtBoard.right - rtBoard.left) - 40;
     int badgeH = 44;
@@ -519,7 +529,7 @@ static void DrawFancyHeader(HDC ctx, RECT rcClient, RECT rtBoard, const wchar_t*
     int cx = rtBoard.left + (rtBoard.right - rtBoard.left) / 2;
     RECT badge{ cx - badgeW / 2, rcClient.top + 8, cx + badgeW / 2, rcClient.top + 8 + badgeH };
 
-
+    // Sombra simple
     RECT shadow = badge; OffsetRect(&shadow, 2, 2);
     HBRUSH brShadow = CreateSolidBrush(RGB(180, 180, 180));
     HBRUSH oldBr = (HBRUSH)SelectObject(ctx, brShadow);
@@ -529,7 +539,7 @@ static void DrawFancyHeader(HDC ctx, RECT rcClient, RECT rtBoard, const wchar_t*
     SelectObject(ctx, oldBr);
     DeleteObject(brShadow);
 
-
+    // Fondo
     HBRUSH brBg = CreateSolidBrush(RGB(245, 246, 248));
     oldBr = (HBRUSH)SelectObject(ctx, brBg);
     HPEN pen = CreatePen(PS_SOLID, 1, RGB(205, 205, 205));
@@ -538,6 +548,7 @@ static void DrawFancyHeader(HDC ctx, RECT rcClient, RECT rtBoard, const wchar_t*
     SelectObject(ctx, oldPen); DeleteObject(pen);
     SelectObject(ctx, oldBr);  DeleteObject(brBg);
 
+    // Tipografía
     HFONT base = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
     LOGFONTW lf{}; GetObject(base, sizeof(LOGFONTW), &lf);
     lf.lfHeight = -14; lf.lfWeight = FW_BOLD;
@@ -545,12 +556,14 @@ static void DrawFancyHeader(HDC ctx, RECT rcClient, RECT rtBoard, const wchar_t*
     lf.lfHeight = -12; lf.lfWeight = FW_NORMAL;
     HFONT hReg = CreateFontIndirectW(&lf);
 
+    // Línea 1
     RECT r1{ badge.left + 14, badge.top + 4, badge.right - 14, badge.top + 22 };
     HFONT oldF = (HFONT)SelectObject(ctx, hBold);
     SetBkMode(ctx, TRANSPARENT);
     DrawTextW(ctx, L"Profesor: Andr\u00E9s Ducuara   \u2013   Materia: Pensamiento Algor\u00EDtmico", -1, &r1,
         DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
 
+    // Línea 2
     RECT r2{ badge.left + 14, badge.top + 22, badge.right - 14, badge.bottom - 4 };
     SelectObject(ctx, hReg);
     std::wstring l2 = std::wstring(L"Damas Internacionales \u2013 Turno: ") + turno;
@@ -559,6 +572,7 @@ static void DrawFancyHeader(HDC ctx, RECT rcClient, RECT rtBoard, const wchar_t*
     SelectObject(ctx, oldF);
     DeleteObject(hBold); DeleteObject(hReg);
 }
+
 
 static bool SaveHBITMAPToBMP(HBITMAP hbm, const wchar_t* path) {
     BITMAP bm; GetObject(hbm, sizeof(bm), &bm);
@@ -584,7 +598,7 @@ static bool SaveHBITMAPToBMP(HBITMAP hbm, const wchar_t* path) {
     if (hFile == INVALID_HANDLE_VALUE) { GlobalUnlock(hDIB); GlobalFree(hDIB); return false; }
 
     BITMAPFILEHEADER bfh = { 0 };
-    bfh.bfType = 0x4D42; 
+    bfh.bfType = 0x4D42; // "BM"
     bfh.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
     bfh.bfSize = bfh.bfOffBits + dwBmpSize;
 
