@@ -4,11 +4,6 @@
 #include <string>                       // Texto para la UI
 #include "../logica/juego.h"            // Acceso a la lógica del juego
 
-// ============================================================
-/* Archivo: ui/ui_win32.h
-   Autor: Steban Felipe Morera Busaquillo
-   Descripción: Capa de presentación Win32 (dibujo y clics). */
-// ============================================================
 class UIWin32 {
 public:
     UIWin32();
