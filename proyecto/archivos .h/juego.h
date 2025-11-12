@@ -78,7 +78,8 @@ private:
     void pushSnapshot();                                   
     static std::wstring posTexto(const Pos& p);            
     std::deque<Snapshot> m_stack;                          
-    std::deque<std::wstring> m_historialTexto;             // Texto de jugadas para UI (limitar tamaño)
-    void addHistorial(const std::wstring& w);              // Añadir entrada (con límite)
+    std::deque<std::wstring> m_historialTexto;             
+    void addHistorial(const std::wstring& w);              
 };
+
 
