@@ -6,6 +6,8 @@ en donde se encuentra centralizada toda la logica del juego y tambien hay una pa
 El proyecto se encuentra dividido en un archivo el cual contiene unas interfases en donde se definen cuales son las acciones o las clases que se tendran en el apartado de
 la implementación que en este caso seran los archivos ".CPP".
 
+El proyecto esta hecho en Visual studio comunity 2022, se enviara un archivo *.ZIP* para el funcionamiento del proyecto y su correcto funcionamiento 
+
 **DESARROLLOS INOVADORES**
 
 En el proyecto encontramos integraciones inovadoras como lo son:
